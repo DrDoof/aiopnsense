@@ -20,7 +20,7 @@ The client currently includes helpers for:
 - firmware version checks, update status, and upgrade actions
 - interface, gateway, CPU, memory, filesystem, and temperature telemetry
 - diagnostics traffic snapshots and live interface traffic stream samples
-- DHCP lease, IPv4 ARP table, and IPv6 NDP table access
+- DHCP lease, IPv4 ARP table, IPv6 NDP table, and timestamped host-observation access
 - firewall rules, NAT rules, alias toggling, and state killing
 - service status lookup and service start/stop/restart operations
 - SMART device listing and per-device SMART detail queries
@@ -35,6 +35,19 @@ The client currently includes helpers for:
 * #### Recommended OPNsense Firmware >= 26.1.1
 
   - For firmware < 26.1.1, the `Firewall and NAT` methods will return empty data.
+
+## Timestamped host observations
+
+`get_host_observations()` reads OPNsense automatic discovery without changing the raw
+`get_arp_table()` or `get_ndp_table()` inventories. It returns a source and rows containing canonical
+MAC addresses, IP addresses, and timezone-aware UTC `last_seen` datetimes. Callers can combine
+observations from either family by MAC and apply their own presence window.
+
+Enable automatic host discovery on OPNsense and grant the API user
+`Interfaces: Neighbors: Automatic discovery`. Disabled discovery is identified by `source: arp-ndp`
+and carries no timestamped observations. Missing access, unsupported firmware, incomplete results,
+and malformed observation data return `None` in non-throwing mode. Empty responses cannot identify
+the data source and also return `None`. Raw NDP entries alone do not prove current reachability.
 
 ## Documentation
 
