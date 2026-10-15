@@ -1720,8 +1720,8 @@ async def test_host_observations_normalizes_packet_sightings(
         family_ip (str): IPv4 or IPv6 address observed by hostwatch.
     """
     client, session = make_mock_session_client(make_client)
-    client._get = AsyncMock(side_effect=client._do_get)
-    session.get.side_effect = [
+    client._post = AsyncMock(side_effect=client._do_post)
+    session.post.side_effect = [
         FakeResponse(),
         FakeResponse(
             json_payload={
@@ -1743,7 +1743,62 @@ async def test_host_observations_normalizes_packet_sightings(
     assert result["rows"][0]["mac"] == "aa:bb:cc:dd:ee:01"
     assert result["rows"][0]["last_seen"] == datetime(2026, 1, 1, tzinfo=UTC)
     assert result["rows"][0]["ip"] == family_ip.replace("0db8", "db8")
-    assert all("rowCount=-1" in call.args[0] for call in session.get.call_args_list)
+    assert session.post.call_args_list[1].kwargs["json"] == {"rowCount": -1}
+    assert all(
+        call.args[0] == "http://localhost/api/hostdiscovery/service/search"
+        for call in session.post.call_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_host_observations_requests_all_rows_through_post_json(
+    make_client: ClientType,
+) -> None:
+    """Request every host observation beyond the server's default 9,999-row page.
+
+    Args:
+        make_client (ClientType): Factory for a client with a mocked HTTP session.
+    """
+    client, session = make_mock_session_client(make_client)
+    client._post = AsyncMock(side_effect=client._do_post)
+    observation = {
+        "source": "discovery",
+        "ether_address": "aa:bb:cc:dd:ee:01",
+        "ip_address": "192.0.2.1",
+        "last_seen": datetime.now(UTC).isoformat(),
+    }
+    observations = [observation.copy() for _ in range(10_000)]
+
+    def search_response(*args: object, **kwargs: object) -> FakeResponse:
+        """Model searchRecordsetBase rowCount handling for the host search endpoint.
+
+        Args:
+            args (object): Positional HTTP request arguments, including the URL.
+            kwargs (object): Keyword HTTP request arguments, including JSON payload.
+
+        Returns:
+            FakeResponse: Search results limited by the POST body's rowCount value.
+        """
+        del args
+        request_payload = kwargs.get("json")
+        row_count = (
+            request_payload.get("rowCount", 9999)
+            if isinstance(request_payload, MutableMapping)
+            else 9999
+        )
+        rows = observations if row_count == -1 else observations[:row_count]
+        return FakeResponse(json_payload={"total": len(observations), "rows": rows})
+
+    session.post.side_effect = search_response
+    session.get.side_effect = search_response
+
+    result = await client.get_host_observations()
+
+    assert result is not None
+    assert len(result["rows"]) == 10_000
+    assert session.post.call_count == 2
+    assert session.post.call_args_list[1].kwargs["json"] == {"rowCount": -1}
+    assert session.get.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -1788,8 +1843,8 @@ async def test_host_observations_rejects_non_authoritative_payloads(
         payload (object): Unusable host-observation response.
     """
     client, session = make_mock_session_client(make_client)
-    client._get = AsyncMock(side_effect=client._do_get)
-    session.get.side_effect = [FakeResponse(), FakeResponse(json_payload=payload)]
+    client._post = AsyncMock(side_effect=client._do_post)
+    session.post.side_effect = [FakeResponse(), FakeResponse(json_payload=payload)]
     assert await client.get_host_observations() is None
 
 
@@ -1801,8 +1856,8 @@ async def test_host_observations_distinguishes_disabled_service(make_client: Cli
         make_client (ClientType): Factory for a client with a mocked HTTP session.
     """
     client, session = make_mock_session_client(make_client)
-    client._get = AsyncMock(side_effect=client._do_get)
-    session.get.side_effect = [
+    client._post = AsyncMock(side_effect=client._do_post)
+    session.post.side_effect = [
         FakeResponse(),
         FakeResponse(
             json_payload={
@@ -1826,5 +1881,5 @@ async def test_host_observations_http_failure_is_unavailable(
         status (int): HTTP failure status of the endpoint probe.
     """
     client, session = make_mock_session_client(make_client)
-    session.get.return_value = FakeResponse(status=status, ok=False)
+    session.post.return_value = FakeResponse(status=status, ok=False)
     assert await client.get_host_observations() is None

@@ -19,7 +19,7 @@ from .helpers import (
 
 ARP_TABLE_ENDPOINT = "/api/diagnostics/interface/search_arp"
 NDP_TABLE_ENDPOINT = "/api/diagnostics/interface/search_ndp"
-HOST_OBSERVATIONS_ENDPOINT = "/api/hostdiscovery/service/search?rowCount=-1"
+HOST_OBSERVATIONS_ENDPOINT = "/api/hostdiscovery/service/search"
 KEA_DHCPV4_GET_ENDPOINT = "/api/kea/dhcpv4/get"
 KEA_LEASES4_SEARCH_ENDPOINT = "/api/kea/leases4/search"
 KEA_LEASES6_SEARCH_ENDPOINT = "/api/kea/leases6/search"
@@ -192,9 +192,9 @@ class DHCPMixin(AiopnsenseClientProtocol):
                 An unavailable endpoint, incomplete response, empty source, or malformed
                 discovery row returns ``None`` rather than an authoritative empty inventory.
         """
-        if not await self._is_get_endpoint_available(HOST_OBSERVATIONS_ENDPOINT):
+        if not await self._is_post_endpoint_available(HOST_OBSERVATIONS_ENDPOINT):
             return None
-        payload = await self._safe_dict_get(HOST_OBSERVATIONS_ENDPOINT)
+        payload = await self._safe_dict_post(HOST_OBSERVATIONS_ENDPOINT, {"rowCount": -1})
         rows = payload.get("rows")
         if not isinstance(rows, list) or not rows:
             return None
