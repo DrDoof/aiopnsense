@@ -206,7 +206,7 @@ class DHCPMixin(AiopnsenseClientProtocol):
             for row in rows
         ):
             return None
-        sources = {row.get("source") for row in rows if isinstance(row, MutableMapping)}
+        sources = {row.get("source") for row in rows}
         if sources == {"arp-ndp"}:
             return {"source": "arp-ndp", "rows": []}
         if sources != {"discovery"}:
@@ -215,8 +215,6 @@ class DHCPMixin(AiopnsenseClientProtocol):
         observations: list[dict[str, Any]] = []
         latest_allowed = datetime.now(UTC) + timedelta(minutes=5)
         for row in rows:
-            if not isinstance(row, MutableMapping):
-                return None
             mac = row.get("ether_address")
             address = row.get("ip_address")
             last_seen = row.get("last_seen")
