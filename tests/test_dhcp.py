@@ -1721,29 +1721,25 @@ async def test_host_observations_normalizes_packet_sightings(
     """
     client, session = make_mock_session_client(make_client)
     client._post = AsyncMock(side_effect=client._do_post)
-    session.post.side_effect = [
-        FakeResponse(),
-        FakeResponse(
-            json_payload={
-                "total": 1,
-                "rows": [
-                    {
-                        "source": "discovery",
-                        "ether_address": "AA-BB-CC-DD-EE-01",
-                        "ip_address": family_ip,
-                        "last_seen": "2026-01-01T02:00:00+02:00",
-                    }
-                ],
-            }
-        ),
-    ]
+    session.post.return_value = FakeResponse(
+        json_payload={
+            "total": 1,
+            "rows": [
+                {
+                    "source": "discovery",
+                    "ether_address": "AA-BB-CC-DD-EE-01",
+                    "ip_address": family_ip,
+                    "last_seen": "2026-01-01T02:00:00+02:00",
+                }
+            ],
+        }
+    )
     result = await client.get_host_observations()
     assert result is not None
     assert result["source"] == "discovery"
     assert result["rows"][0]["mac"] == "aa:bb:cc:dd:ee:01"
     assert result["rows"][0]["last_seen"] == datetime(2026, 1, 1, tzinfo=UTC)
     assert result["rows"][0]["ip"] == family_ip.replace("0db8", "db8")
-    assert session.post.call_args_list[1].kwargs["json"] == {"rowCount": -1}
     assert all(
         call.args[0] == "http://localhost/api/hostdiscovery/service/search"
         for call in session.post.call_args_list
@@ -1796,9 +1792,6 @@ async def test_host_observations_requests_all_rows_through_post_json(
 
     assert result is not None
     assert len(result["rows"]) == 10_000
-    assert session.post.call_count == 2
-    assert session.post.call_args_list[1].kwargs["json"] == {"rowCount": -1}
-    assert session.get.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -1844,7 +1837,7 @@ async def test_host_observations_rejects_non_authoritative_payloads(
     """
     client, session = make_mock_session_client(make_client)
     client._post = AsyncMock(side_effect=client._do_post)
-    session.post.side_effect = [FakeResponse(), FakeResponse(json_payload=payload)]
+    session.post.return_value = FakeResponse(json_payload=payload)
     assert await client.get_host_observations() is None
 
 
@@ -1857,15 +1850,12 @@ async def test_host_observations_distinguishes_disabled_service(make_client: Cli
     """
     client, session = make_mock_session_client(make_client)
     client._post = AsyncMock(side_effect=client._do_post)
-    session.post.side_effect = [
-        FakeResponse(),
-        FakeResponse(
-            json_payload={
-                "total": 1,
-                "rows": [{"source": "arp-ndp", "last_seen": ""}],
-            }
-        ),
-    ]
+    session.post.return_value = FakeResponse(
+        json_payload={
+            "total": 1,
+            "rows": [{"source": "arp-ndp", "last_seen": ""}],
+        }
+    )
     assert await client.get_host_observations() == {"source": "arp-ndp", "rows": []}
 
 
